@@ -245,7 +245,7 @@ static int32_t DecryptAesCbc(AesCryptBufferDatas* datas, const uint8_t* aesKey,
         return ret;
     }
     size_t invalid_padding = 0;
-    cipherCtx.get_padding(datas->output, datas->inputLen, datas->outputLen, &invalid_padding);
+    (void)cipherCtx.get_padding(datas->output, datas->inputLen, datas->outputLen, &invalid_padding);
     ret = (int)invalid_padding;
     if (ret != ATTEST_OK) {
         ATTEST_LOG_ERROR("[DecryptAesCbc] Get padding failed, ret = -0x%x", ret);
