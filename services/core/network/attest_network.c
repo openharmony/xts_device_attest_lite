@@ -993,6 +993,26 @@ int32_t SendAttestMsg(const DevicePacket *devPacket, ATTEST_ACTION_TYPE actionTy
     return retCode;
 }
 
+static int32_t ParseAttestPort(const char *text, char *portOut, size_t portSize)
+{
+    if (text == NULL || *text == '\0' || portOut == NULL || portSize == 0) {
+        return ATTEST_ERR;
+    }
+    if (*text < '0' || *text > '9') {
+        return ATTEST_ERR;
+    }
+    errno = 0;
+    char *end = NULL;
+    unsigned long port = strtoul(text, &end, 10);
+    if (end == text || *end != '\0' || errno == ERANGE || port > 65535UL) {
+        return ATTEST_ERR;
+    }
+    if (sprintf_s(portOut, portSize, "%lu", port) <= 0) {
+        return ATTEST_ERR;
+    }
+    return ATTEST_OK;
+}
+
 static int32_t SplitNetworkInfoSymbol(char *inputData, List *list)
 {
     if (inputData == NULL || list == NULL) {
@@ -1006,17 +1026,29 @@ static int32_t SplitNetworkInfoSymbol(char *inputData, List *list)
         return ATTEST_ERR;
     }
 
-    int32_t ret = sscanf_s(inputData, "%" HOST_PATTERN ":%" PORT_PATTERN,
-        networkServerInfo->hostName, MAX_HOST_NAME_LEN,
-        networkServerInfo->port, MAX_PORT_LEN);
-
-    if (ret != PARAM_TWO) {
-        ATTEST_LOG_ERROR("[SplitNetworkInfoSymbol] failed to split NetworkInfo, host[%s] port[%s]",
-            networkServerInfo->hostName, networkServerInfo->port);
+    char *colon = strchr(inputData, ':');
+    if (colon == NULL || colon == inputData || *(colon + 1) == '\0') {
+        ATTEST_LOG_ERROR("[SplitNetworkInfoSymbol] failed to split NetworkInfo");
         ATTEST_MEM_FREE(networkServerInfo);
         return ATTEST_ERR;
     }
-    ret = AddListNode(list, (char *)networkServerInfo);
+    size_t hostLen = (size_t)(colon - inputData);
+    if (hostLen > MAX_HOST_NAME_LEN) {
+        ATTEST_MEM_FREE(networkServerInfo);
+        return ATTEST_ERR;
+    }
+    if (memcpy_s(networkServerInfo->hostName, MAX_HOST_NAME_LEN + 1, inputData, hostLen) != EOK) {
+        ATTEST_MEM_FREE(networkServerInfo);
+        return ATTEST_ERR;
+    }
+    networkServerInfo->hostName[hostLen] = '\0';
+    if (ParseAttestPort(colon + 1, networkServerInfo->port, MAX_PORT_LEN + 1) != ATTEST_OK) {
+        ATTEST_LOG_ERROR("[SplitNetworkInfoSymbol] leftover or invalid port, host[%s]",
+            networkServerInfo->hostName);
+        ATTEST_MEM_FREE(networkServerInfo);
+        return ATTEST_ERR;
+    }
+    int32_t ret = AddListNode(list, (char *)networkServerInfo);
     return ret;
 }
 
